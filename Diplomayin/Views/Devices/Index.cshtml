@@ -1,0 +1,27 @@
+﻿@model List<Diplomayin.Models.Device>
+
+<h2>Devices</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Operating System</th>
+            <th>Compliant</th>
+            <th>MaintenanceTimes</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var device in Model)
+        {
+            <tr>
+                <td>@device.Id</td>
+                <td>@device.Name</td>
+                <td>@device.OperatingSystem</td>
+                <td>@device.IsCompliant</td>
+                <td>@device.MaintenanceTimes</td>
+            </tr>
+        }
+    </tbody>
+</table>
+<a href="@Url.Action("Create")" class="btn btn-primary">Add Device</a>

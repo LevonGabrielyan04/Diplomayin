@@ -1,0 +1,23 @@
+﻿@model List<Diplomayin.Models.Policy>
+
+<h2>Policies</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Requirements</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var policy in Model)
+        {
+            <tr>
+                <td>@policy.Id</td>
+                <td>@policy.Name</td>
+                <td>@policy.Requirements</td>
+            </tr>
+        }
+    </tbody>
+</table>
+<a href="@Url.Action("Create")" class="btn btn-primary">Add Policy</a>

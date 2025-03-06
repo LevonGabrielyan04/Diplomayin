@@ -1,0 +1,22 @@
+﻿@model Diplomayin.Models.Device
+
+<h2>Add Device</h2>
+@using (Html.BeginForm("Create", "Devices", FormMethod.Post))
+{
+    <div class="form-group">
+        @Html.LabelFor(m => m.Name)
+        @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Name)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.OperatingSystem)
+        @Html.TextBoxFor(m => m.OperatingSystem, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.OperatingSystem)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.MaintenanceTimes)
+        @Html.TextBoxFor(m => m.MaintenanceTimes, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.MaintenanceTimes)
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+}

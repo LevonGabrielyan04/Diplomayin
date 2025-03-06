@@ -1,0 +1,17 @@
+﻿@model Diplomayin.Models.Policy
+
+<h2>Add Policy</h2>
+@using (Html.BeginForm("Create", "Policies", FormMethod.Post))
+{
+    <div class="form-group">
+        @Html.LabelFor(m => m.Name)
+        @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Name)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.Requirements)
+        @Html.TextBoxFor(m => m.Requirements, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Requirements)
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+}
