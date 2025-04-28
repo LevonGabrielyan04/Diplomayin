@@ -18,5 +18,10 @@
         @Html.TextBoxFor(m => m.MaintenanceTimes, new { @class = "form-control" })
         @Html.ValidationMessageFor(m => m.MaintenanceTimes)
     </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.IPAddress)
+        @Html.TextBoxFor(m => m.IPAddress, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.IPAddress)
+    </div>
     <button type="submit" class="btn btn-primary">Save</button>
 }

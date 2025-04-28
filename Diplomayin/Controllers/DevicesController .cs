@@ -1,5 +1,5 @@
 ﻿//[   {     "Name": "Disk Cleanup",     "Frequency": "Weekly",     "NextExecution": "2023-10-30T10:00:00Z"   },   { "Name": "Software Update",     "Frequency": "Monthly",     "NextExecution": "2023-11-15T12:00:00Z"   } ]
-//{   "Firewall": "Enabled",   "Encryption": "Enabled",   "PasswordPolicy": "Strong" }
+//{   "Firewall": "Enabled",   "Encryption": "Enabled",   "Antivirus": "Enabled" }
 using Diplomayin.Controllers;
 using Diplomayin.Data;
 using Diplomayin.Models;
@@ -9,6 +9,8 @@ using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.Text;
 using System.Web.Http;
+using System.Net.NetworkInformation;
+using System.Net;
 
 // MaintenanceSchedule class
 public class MaintenanceSchedule
@@ -117,15 +119,23 @@ public class DevicesController : Controller
     // Enforce policies on all devices
     public async Task<IActionResult> EnforcePolicies()
     {
-        var devices = await _context.Devices.ToListAsync();
-        var policies = await _context.Policies.ToListAsync();
-
+                        
+        var devices = _context.Devices.ToList();
+        var policies = _policies;
         foreach (var device in devices)
         {
             foreach (var policy in policies)
             {
+                string url = $"http://{device.IPAddress}:5000";
+                var content = new StringContent(JsonConvert.SerializeObject(policy), Encoding.UTF8, "application/json");
+                
+                try { 
+                    httpClient.PostAsync(url, content);
+                } catch (Exception ex) { }
+
                 // Make the device compliant with the policy
                 await MakeDeviceCompliant(device, policy);
+
             }
         }
 
@@ -136,25 +146,32 @@ public class DevicesController : Controller
     // Helper method to make a device compliant with a policy
     private async Task MakeDeviceCompliant(Device device, Policy policy)
     {
-        var deviceConfig = GetDeviceConfiguration(device).Result;
-
-        var policyRequirements = JsonConvert.DeserializeObject<Dictionary<string, string>>(policy.Requirements);
-
-        // Update device configuration to match policy requirements
-        foreach (var requirement in policyRequirements)
+        try
         {
-            deviceConfig[requirement.Key] = requirement.Value;
+            device.IsCompliant = true;
+
+            // Update the device in the database
+            _context.Devices.Update(device);
+            await _context.SaveChangesAsync();
+            // Deserialize the policy requirements
+            var policyRequirements = JsonConvert.DeserializeObject<Dictionary<string, string>>(policy.Requirements);
+
+            // Log the policy being applied
+            Console.WriteLine($"Applying policy to device {device.Name} at {device.IPAddress}: {JsonConvert.SerializeObject(policyRequirements)}");
+
+            // Send the policy to the device via a POST request
+            string url = $"http://{device.IPAddress}:5000";
+            var content = new StringContent(JsonConvert.SerializeObject(policyRequirements), Encoding.UTF8, "application/json");
+
+            HttpResponseMessage response = await httpClient.PostAsync(url, content);
+
         }
-
-        // Simulate writing the updated configuration back to the device
-        SaveDeviceConfiguration(device, deviceConfig).Wait();
-
-        device.Configuration = JsonConvert.SerializeObject(deviceConfig);
-        device.IsCompliant = true;
-
-        _context.Devices.Update(device);
-        await _context.SaveChangesAsync();
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error applying policy to device {device.Name}: {ex.Message}");
+        }
     }
+
 
     // Simulate reading the device's configuration from an API
     private async Task<Dictionary<string, string>> GetDeviceConfiguration(Device device)
@@ -191,6 +208,129 @@ public class DevicesController : Controller
         catch (HttpRequestException ex)
         {
             Console.WriteLine($"Error updating device configuration: {ex.Message}");
+        }
+    }
+    private string GetLocalSubnet()
+{
+    foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+    {
+        if (networkInterface.OperationalStatus == OperationalStatus.Up &&
+            (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
+             networkInterface.NetworkInterfaceType == NetworkInterfaceType.Wireless80211))
+        {
+            var ipProperties = networkInterface.GetIPProperties();
+            foreach (var unicastAddress in ipProperties.UnicastAddresses)
+            {
+                if (unicastAddress.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                {
+                    var ipAddress = unicastAddress.Address;
+                    var subnetMask = unicastAddress.IPv4Mask;
+
+                    if (ipAddress != null && subnetMask != null)
+                    {
+                        // Calculate the subnet
+                        var subnetBytes = ipAddress.GetAddressBytes();
+                        var maskBytes = subnetMask.GetAddressBytes();
+                        var subnetAddress = new byte[subnetBytes.Length];
+
+                        for (int i = 0; i < subnetBytes.Length; i++)
+                        {
+                            subnetAddress[i] = (byte)(subnetBytes[i] & maskBytes[i]);
+                        }
+
+                        return string.Join(".", subnetAddress.Take(3)); // Return the first three octets
+                    }
+                }
+            }
+        }
+    }
+
+    return null; // Subnet could not be determined
+}
+    //await DiscoverDevices("192.168.1");
+    public async Task<IActionResult> DiscoverDevices()
+{
+      //  await _context.Database.ExecuteSqlRawAsync("DELETE FROM Devices");
+      //return BadRequest("Unable to detect the local subnet.");;
+    var subnet = GetLocalSubnet();
+    if (string.IsNullOrEmpty(subnet))
+    {
+        return BadRequest("Unable to detect the local subnet.");
+    }
+
+    var discoveredDevices = new List<Device>();
+    var pingTasks = new List<Task<(string ipAddress, bool isReachable)>>();
+
+    // Generate all possible IP addresses in the subnet and start pinging them in parallel
+    for (int i = 1; i < 255; i++) // Assuming a /24 subnet
+    {
+        string ipAddress = $"{subnet}.{i}";
+        pingTasks.Add(PingDeviceAsync(ipAddress));
+    }
+
+    // Wait for all ping tasks to complete
+    var pingResults = await Task.WhenAll(pingTasks);
+
+    // Process the results of the ping operations
+    foreach (var result in pingResults)
+    {
+        if (result.isReachable)
+        {
+            // Simulate fetching device details (e.g., name, OS)
+            var device = new Device
+            {
+                Name = $"Device-{result.ipAddress.Split('.').Last()}",
+                OperatingSystem = "Unknown",
+                Configuration = "[]",
+                IsCompliant = false,
+                MaintenanceTimes = "[]",
+                IPAddress = result.ipAddress
+            };
+
+            discoveredDevices.Add(device);
+        }
+    }
+
+    // Add discovered devices to the database
+    if (discoveredDevices.Any())
+    {
+        _context.Devices.AddRange(discoveredDevices);
+        await _context.SaveChangesAsync();
+    }
+
+    return Json(discoveredDevices);
+}
+
+private async Task<(string ipAddress, bool isReachable)> PingDeviceAsync(string ipAddress)
+{
+    using (var ping = new Ping())
+    {
+        try
+        {
+            var reply = await ping.SendPingAsync(ipAddress, 100); // Timeout: 100ms
+            return (ipAddress, reply.Status == IPStatus.Success);
+        }
+        catch
+        {
+            return (ipAddress, false);
+        }
+    }
+}
+
+
+    private async Task<bool> PingDevice(string ipAddress)
+    {
+        using (var ping = new Ping())
+        {
+            try
+            {
+                var reply = await ping.SendPingAsync(ipAddress, 100); // Timeout: 100ms
+                return reply.Status == IPStatus.Success;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
