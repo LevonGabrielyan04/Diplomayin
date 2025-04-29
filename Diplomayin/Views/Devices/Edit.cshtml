@@ -1,0 +1,34 @@
+﻿@model Diplomayin.Models.Device
+
+<h2>Edit Device</h2>
+@using (Html.BeginForm("EditPost", "Devices", FormMethod.Post))
+{
+    @Html.HiddenFor(m => m.Id)
+    @Html.HiddenFor(m => m.IsCompliant)
+    <div class="form-group">
+        @Html.LabelFor(m => m.Name)
+        @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Name)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.OperatingSystem)
+        @Html.TextBoxFor(m => m.OperatingSystem, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.OperatingSystem)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.MaintenanceTimes)
+        @Html.TextBoxFor(m => m.MaintenanceTimes, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.MaintenanceTimes)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.IPAddress)
+        @Html.TextBoxFor(m => m.IPAddress, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.IPAddress)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.Configuration)
+        @Html.TextBoxFor(m => m.Configuration, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Configuration)
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+}

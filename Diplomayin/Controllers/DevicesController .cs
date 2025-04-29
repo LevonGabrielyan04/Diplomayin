@@ -67,12 +67,86 @@ public class DevicesController : Controller
     // GET: Devices
     public async Task<IActionResult> Index()
     {
-        CheckMaintenanceNotifications();
+        string messages = CheckMaintenanceNotifications();
+        ViewBag.AlertMessage = messages;
+        MaintenanceService maintenanceService = new MaintenanceService();
+        foreach (var item in _context.Devices)
+        {
+            item.MaintenanceTimes = maintenanceService.UpdateMaintenanceTimes(item.MaintenanceTimes);
+            _context.Devices.Update(item);
+            _context.SaveChanges();
+        }
         return View(await _context.Devices.ToListAsync());
     }
 
-    private void CheckMaintenanceNotifications()
+    public class MaintenanceService
     {
+        public string UpdateMaintenanceTimes(string jsonData)
+        {
+            // Deserialize the JSON string to a list of MaintenanceTask objects
+            var tasks = JsonConvert.DeserializeObject<List<MaintenanceTask>>(jsonData);
+        
+            // Update each task's NextExecution based on its frequency
+            foreach (var task in tasks)
+            {
+                switch (task.Frequency.ToLower())
+                {
+                    case "weekly":
+                        task.NextExecution = DateTime.Now.AddDays(7);
+                        break;
+                    case "monthly":
+                        task.NextExecution = DateTime.Now.AddMonths(1);
+                        break;
+                    // Add more frequency cases if needed
+                }
+            }
+        
+            // Serialize the updated list back to JSON
+            return JsonConvert.SerializeObject(tasks, Formatting.Indented);
+        }
+        public class MaintenanceTask
+        {
+            public string Name { get; set; }
+            public string Frequency { get; set; }
+            public DateTime NextExecution { get; set; }
+        }
+    }
+
+    public async Task<IActionResult> Delete(int id)
+    {
+        var device = await _context.Devices.FirstOrDefaultAsync(d => d.Id == id);
+        
+         _context.Devices.Remove(device);
+        _context.SaveChanges();
+
+        return RedirectToAction("Index");
+    }
+
+    [Microsoft.AspNetCore.Mvc.HttpGet("Devices/Edit/{id}")]
+    public async Task<IActionResult> Edit(int id)
+    {
+        var device = await _context.Devices.FirstOrDefaultAsync(d => d.Id == id);
+        return View(device);
+    }
+
+            [Microsoft.AspNetCore.Mvc.HttpPost]
+        [ValidateAntiForgeryToken]
+     public async Task<IActionResult> EditPost(Device device)
+     {
+            if (!ModelState.IsValid)
+            {
+                return View("Edit", device);
+            }
+         _context.Devices.Update(device);
+         await _context.SaveChangesAsync();
+         return RedirectToAction("Index");
+     }
+     
+
+
+    private string CheckMaintenanceNotifications()
+    {
+        string messages = "";
         foreach (var device in _context.Devices)
         {
             if (!string.IsNullOrEmpty(device.MaintenanceTimes))
@@ -83,11 +157,13 @@ public class DevicesController : Controller
                 {
                     if (DateTime.UtcNow >= schedule.NextExecution)
                     {
-                        Console.WriteLine($"Maintenance required for device {device.Name}: {schedule.Name}");
+                        //Console.WriteLine($"Maintenance required for device {device.Name}: {schedule.Name}");
+                        messages += $"Maintenance required for device {device.Name}: {schedule.Name}";
                     }
                 }
             }
         }
+        return messages;
     }
     // GET: Devices/Create
     public ActionResult Create()
@@ -119,6 +195,10 @@ public class DevicesController : Controller
     // Enforce policies on all devices
     public async Task<IActionResult> EnforcePolicies()
     {
+        //        await _context.Database.ExecuteSqlRawAsync("DELETE FROM Devices");
+
+        //await _context.Database.ExecuteSqlRawAsync("DELETE FROM sqlite_sequence WHERE name = 'Devices'");
+
                         
         var devices = _context.Devices.ToList();
         var policies = _policies;
@@ -249,10 +329,10 @@ public class DevicesController : Controller
 }
     //await DiscoverDevices("192.168.1");
     public async Task<IActionResult> DiscoverDevices()
-{
-      //  await _context.Database.ExecuteSqlRawAsync("DELETE FROM Devices");
-      //return BadRequest("Unable to detect the local subnet.");;
-    var subnet = GetLocalSubnet();
+    {
+        //await _context.Database.ExecuteSqlRawAsync("DELETE FROM Devices");
+        //return BadRequest("Unable to detect the local subnet."); ;
+        var subnet = GetLocalSubnet();
     if (string.IsNullOrEmpty(subnet))
     {
         return BadRequest("Unable to detect the local subnet.");
@@ -271,12 +351,20 @@ public class DevicesController : Controller
     // Wait for all ping tasks to complete
     var pingResults = await Task.WhenAll(pingTasks);
 
+    string exeFilePath = Path.Combine(Directory.GetCurrentDirectory(), "Files", "example.exe"); // Adjust the path as needed
+
+
     // Process the results of the ping operations
     foreach (var result in pingResults)
     {
         if (result.isReachable)
         {
-            // Simulate fetching device details (e.g., name, OS)
+            var existingDevice = await _context.Devices.FirstOrDefaultAsync(d => d.IPAddress == result.ipAddress);
+            if (existingDevice != null)
+            {
+                Console.WriteLine($"Device with IP {result.ipAddress} already exists. Skipping...");
+                continue;
+            }
             var device = new Device
             {
                 Name = $"Device-{result.ipAddress.Split('.').Last()}",
@@ -288,6 +376,8 @@ public class DevicesController : Controller
             };
 
             discoveredDevices.Add(device);
+
+            //await SendExeToDevice(result.ipAddress, exeFilePath);
         }
     }
 
@@ -298,7 +388,51 @@ public class DevicesController : Controller
         await _context.SaveChangesAsync();
     }
 
-    return Json(discoveredDevices);
+    //return Json(discoveredDevices);
+    //return View(await _context.Devices.ToListAsync());
+    return RedirectToAction("Index");
+}
+
+    private async Task SendExeToDevice(string deviceIpAddress, string filePath)
+{
+    try
+    {
+        // Ensure the file exists
+        if (!System.IO.File.Exists(filePath))
+        {
+            Console.WriteLine($"❌ File not found: {filePath}");
+            return;
+        }
+
+        // Create the URL for the device's endpoint
+        string url = $"http://{deviceIpAddress}:5000/upload"; // Assuming the device listens on port 5000 and has an /upload endpoint
+
+        // Read the file content
+        var fileContent = new ByteArrayContent(await System.IO.File.ReadAllBytesAsync(filePath));
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+        // Create the multipart form data content
+        var formData = new MultipartFormDataContent
+        {
+            { fileContent, "file", System.IO.Path.GetFileName(filePath) }
+        };
+
+        // Send the POST request
+        HttpResponseMessage response = await httpClient.PostAsync(url, formData);
+
+        if (response.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"✅ Successfully sent the file to device at {deviceIpAddress}.");
+        }
+        else
+        {
+            Console.WriteLine($"❌ Failed to send the file to device at {deviceIpAddress}. Status Code: {response.StatusCode}");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Error sending file to device at {deviceIpAddress}: {ex.Message}");
+    }
 }
 
 private async Task<(string ipAddress, bool isReachable)> PingDeviceAsync(string ipAddress)

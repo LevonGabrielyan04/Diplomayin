@@ -20,8 +20,19 @@
                 <td>@device.OperatingSystem</td>
                 <td>@device.IsCompliant</td>
                 <td>@device.MaintenanceTimes</td>
+                <td>
+                    <a href="@Url.Action("Edit", "Devices", new { id = device.Id })" class="btn btn-warning btn-sm">Modify</a>
+                    <a href="@Url.Action("Delete", "Devices", new { id = device.Id })" class="btn btn-danger btn-sm">Delete</a>
+                </td>
             </tr>
         }
     </tbody>
 </table>
 <a href="@Url.Action("Create")" class="btn btn-primary">Add Device</a>
+
+@if (ViewBag.AlertMessage != null && ViewBag.AlertMessage!="")
+{
+    <script type="text/javascript">
+        alert('@ViewBag.AlertMessage');
+    </script>
+}
